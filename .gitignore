@@ -1,0 +1,5 @@
+downloads/ 
+logs/ 
+__pycache__/ 
+*.pyc 
+*.pdf 
