@@ -1,0 +1,6 @@
+2026-05-01 09:51:53,277 [32mINFO    [0m __main__ — Starting Naukri Auto-Apply Bot
+2026-05-01 09:51:59,233 [32mINFO    [0m src.browser — Browser launched
+2026-05-01 09:51:59,234 [32mINFO    [0m __main__ — Opening Naukri login page. Please log in manually...
+2026-05-01 09:55:37,554 [32mINFO    [0m __main__ — Closing any popups...
+2026-05-01 09:55:37,735 [32mINFO    [0m src.browser — Closed 0 popup(s)
+2026-05-01 09:55:40,737 [32mINFO    [0m src.resume_handler — Navigating to profile: https://www.naukri.com/mnjuser/profile
