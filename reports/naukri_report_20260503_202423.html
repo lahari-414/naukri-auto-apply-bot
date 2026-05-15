@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Naukri Auto-Apply Report</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;background:#ffffff;color:#1e293b;padding:32px 24px}
+  .wrap{max-width:1200px;margin:0 auto}
+  h1{font-size:1.8rem;color:#16a34a;margin-bottom:4px}
+  .applicant-line{font-size:.92rem;color:#475569;margin-bottom:4px}
+  .applicant-line strong{color:#2563eb;font-weight:600}
+  .sub{color:#94a3b8;font-size:.82rem;margin-bottom:28px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:26px}
+  .stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;text-align:center;
+         box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .num{font-size:2.2rem;font-weight:700}
+  .lbl{color:#94a3b8;font-size:.72rem;text-transform:uppercase;margin-top:4px;letter-spacing:.05em}
+  .c1{color:#2563eb}.c2{color:#16a34a}.c3{color:#d97706}.c4{color:#7c3aed}.c5{color:#dc2626}
+  .sk{margin-bottom:22px}
+  .sk-t{font-size:.72rem;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;letter-spacing:.05em}
+  .stag{display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;
+         font-size:.78rem;padding:3px 11px;border-radius:20px;margin:3px}
+  .tw{overflow-x:auto;border-radius:12px;border:1px solid #e2e8f0;
+       box-shadow:0 1px 6px rgba(0,0,0,.06)}
+  table{width:100%;border-collapse:collapse;font-size:.84rem}
+  thead tr{background:#f1f5f9}
+  th{padding:12px 14px;text-align:left;color:#475569;font-weight:600;
+      text-transform:uppercase;font-size:.7rem;white-space:nowrap;letter-spacing:.04em}
+  tbody tr{border-top:1px solid #f1f5f9}
+  tbody tr:hover{background:#f8fafc}
+  td{padding:10px 14px;vertical-align:middle;color:#1e293b}
+  td a{color:#2563eb;text-decoration:none;font-weight:500}
+  td a:hover{text-decoration:underline}
+  .company-cell{color:#0f172a;font-weight:500}
+  .badge{display:inline-block;padding:4px 10px;border-radius:20px;
+          font-size:.72rem;font-weight:600;white-space:nowrap}
+  .badge-applied{background:#dcfce7;color:#15803d}
+  .badge-already{background:#fef9c3;color:#a16207}
+  .badge-external{background:#ede9fe;color:#6d28d9}
+  .badge-failed{background:#fee2e2;color:#dc2626}
+  .ft{margin-top:26px;text-align:center;color:#cbd5e1;font-size:.78rem}
+</style></head><body><div class="wrap">
+  <h1>&#x1F4CB; Naukri Auto-Apply Report</h1>
+  <div class="applicant-line">Applied by: <strong>Bhimanandam Lakshmi Lahari</strong></div>
+  <div class="sub">Generated: 03 May 2026, 08:35 PM</div>
+  <div class="stats">
+    <div class="stat"><div class="num c1">20</div><div class="lbl">Total</div></div>
+    <div class="stat"><div class="num c2">20</div><div class="lbl">Applied</div></div>
+    <div class="stat"><div class="num c3">0</div><div class="lbl">Already Applied</div></div>
+    <div class="stat"><div class="num c4">0</div><div class="lbl">External</div></div>
+    <div class="stat"><div class="num c5">0</div><div class="lbl">Failed</div></div>
+  </div>
+  <div class="sk"><div class="sk-t">Skills from Resume</div><span class="stag">Java</span><span class="stag">Python</span><span class="stag">Selenium</span></div>
+  <div class="tw"><table>
+    <thead><tr>
+      <th>Job Title</th><th>Company</th><th>Location</th><th>Exp</th>
+      <th>Salary</th><th>Status</th><th>Note</th><th>Applied At</th>
+    </tr></thead>
+    <tbody><tr>
+            <td><a href="https://www.naukri.com/job-listings-software-trainee-genitech-software-solutions-hyderabad-0-to-0-years-020526004777" target="_blank">Software Trainee</a></td>
+            <td class="company-cell">Genitech Software Solutions Private Limi...</td>
+            <td>Hyderabad</td><td>0 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Submitted successfully</td><td>2026-05-03 20:26:44</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-fullstack-developer-akana-services-mysuru-0-to-1-years-200426000615" target="_blank">Fullstack Developer</a></td>
+            <td class="company-cell">Akana Services</td>
+            <td>Mysuru(University of Mysore)</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:27:06</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-associate-software-developer-conceptia-bengaluru-0-to-1-years-070226004966" target="_blank">Associate Software Developer</a></td>
+            <td class="company-cell">Conceptia
+4.2125 Reviews</td>
+            <td>Bengaluru(Banashankari Stage III)</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:27:29</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-backend-software-engineer-llmops-one97-communications-limited-noida-0-to-3-years-090426920868" target="_blank">Backend - Software Engineer (LLMOps)</a></td>
+            <td class="company-cell">Paytm
+3.29.3K Reviews</td>
+            <td>Noida</td><td>0-3 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Submitted successfully</td><td>2026-05-03 20:27:42</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-junior-developer-galactis-ai-tech-chennai-0-to-2-years-181225503968" target="_blank">Junior Developer</a></td>
+            <td class="company-cell">Galactis Ai Tech</td>
+            <td>Chennai</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:28:10</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-sde-1-dzylo-gurugram-0-to-3-years-160426502273" target="_blank">SDE - 1</a></td>
+            <td class="company-cell">Dzylo
+4.25 Reviews</td>
+            <td>Gurugram</td><td>0-3 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:28:38</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-software-analyst-ptc-software-india-pune-0-to-2-years-140426020797" target="_blank">Software Analyst</a></td>
+            <td class="company-cell">PTC
+4.2580 Reviews</td>
+            <td>Pune</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:29:03</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-junior-developer-edaya-app-thiruvananthapuram-0-to-2-years-050226503327" target="_blank">Junior Developer</a></td>
+            <td class="company-cell">Edaya</td>
+            <td>Thiruvananthapuram</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:29:30</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-trainee-software-developer-tipsons-group-ahmedabad-0-to-2-years-120424501601" target="_blank">Trainee Software Developer</a></td>
+            <td class="company-cell">Tipsons Group
+4.010 Reviews</td>
+            <td>Ahmedabad</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:29:58</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-backend-developer-requin-group-jaipur-0-to-1-years-280625501253" target="_blank">Backend Developer</a></td>
+            <td class="company-cell">Requin Solutions
+3.954 Reviews</td>
+            <td>Jaipur</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:30:27</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-software-development-engineer-frontend-coox-noida-0-to-2-years-270825502782" target="_blank">Software Development Engineer Frontend</a></td>
+            <td class="company-cell">Coox Online
+3.750 Reviews</td>
+            <td>Noida</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:30:57</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-developer-upkar-leasing-finance-company-mumbai-0-to-4-years-260825503790" target="_blank">Developer</a></td>
+            <td class="company-cell">Upkar Leasing And Finance Company</td>
+            <td>Mumbai</td><td>0-4 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:31:27</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-frontend-developer-sde-ii-legistify-gurugram-0-to-2-years-221124503737" target="_blank">Frontend Developer (SDE II)</a></td>
+            <td class="company-cell">Legistify
+2.011 Reviews</td>
+            <td>Gurugram</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:31:55</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-mobile-app-developer-sde-ii-legistify-gurugram-0-to-2-years-221124503730" target="_blank">Mobile App Developer (SDE II)</a></td>
+            <td class="company-cell">Legistify
+2.011 Reviews</td>
+            <td>Gurugram</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:32:23</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-backend-developer-sde-iii-legistify-gurugram-0-to-2-years-221124503729" target="_blank">Backend Developer (SDE III)</a></td>
+            <td class="company-cell">Legistify
+2.011 Reviews</td>
+            <td>Gurugram</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:32:51</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-backend-developer-sde-ii-legistify-gurugram-0-to-1-years-221124503725" target="_blank">Backend Developer (SDE II)</a></td>
+            <td class="company-cell">Legistify
+2.011 Reviews</td>
+            <td>Gurugram</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:33:19</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-sde-1-coding-ninjas-india-gurugram-0-to-1-years-170326503181" target="_blank">SDE 1</a></td>
+            <td class="company-cell">Coding Ninjas
+3.7338 Reviews</td>
+            <td>Gurugram</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:33:47</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-back-end-developer-visioneinfotech-surat-0-to-2-years-160724500960" target="_blank">Back End Developer</a></td>
+            <td class="company-cell">Visione Infotech</td>
+            <td>Surat</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:34:14</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-unity-game-developer-lufick-gurugram-0-to-1-years-140524501565" target="_blank">Unity Game Developer</a></td>
+            <td class="company-cell">Lufick
+4.28 Reviews</td>
+            <td>Gurugram</td><td>0-1 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:34:42</td>
+        </tr><tr>
+            <td><a href="https://www.naukri.com/job-listings-backend-developer-yukthi-marketing-pvt-ltd-vijayawada-0-to-2-years-140125502554" target="_blank">Backend Developer</a></td>
+            <td class="company-cell">Yukthi Marketing</td>
+            <td>Vijayawada</td><td>0-2 Yrs</td>
+            <td>N/A</td>
+            <td><span class="badge badge-applied">Applied</span></td>
+            <td>Apply flow completed</td><td>2026-05-03 20:35:11</td>
+        </tr></tbody>
+  </table></div>
+  <div class="ft">Naukri Auto-Apply Bot &middot; Bhimanandam Lakshmi Lahari &middot; 2026</div>
+</div></body></html>

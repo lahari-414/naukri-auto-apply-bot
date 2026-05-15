@@ -1,2 +1,33 @@
-selenium>=4.15.0
-webdriver-manager>=4.0.0
+# Naukri Auto-Apply Bot
+
+Automatically applies to jobs on Naukri.com using Python and Selenium.
+
+## What This Bot Does
+1. Opens Chrome and waits for Naukri login
+2. Downloads resume PDF from Naukri profile
+3. Extracts skills from resume (Java, Python, Selenium etc.)
+4. Searches matching jobs on Naukri (up to 20 jobs)
+5. Auto-applies to each job
+6. Generates HTML + CSV report with all results
+
+## Requirements
+- Python 3.10+
+- Google Chrome browser
+- Naukri.com account with resume uploaded
+
+## Installation
+pip install -r requirements.txt
+
+## How to Run
+python main.py
+
+## Output Report
+After running, check the reports/ folder
+- naukri_report_DATE.html  (open in browser)
+- naukri_report_DATE.csv   (open in Excel)
+
+## Tech Stack
+- Python, Selenium, pdfplumber, ChromeDriver
+
+## Author
+Bhimanandam Lakshmi Lahari

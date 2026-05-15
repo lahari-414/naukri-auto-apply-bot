@@ -1,8 +1,4 @@
-"""
-Naukri Job Scraper — Fixed Version
-====================================
-FIX: Company name "N/A" రాకుండా Naukri 2024 HTML selectors పెట్టాం
-"""
+
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -15,13 +11,13 @@ import csv
 import json
 from datetime import datetime
 
-# ─── Config ───────────────────────────────────────────────
+
 SEARCH_KEYWORD  = "Python Developer"
 SEARCH_LOCATION = "Hyderabad"
 MAX_PAGES       = 5
 OUTPUT_CSV      = "jobs_output.csv"
 OUTPUT_JSON     = "jobs_output.json"
-# ──────────────────────────────────────────────────────────
+
 
 
 def get_driver():
@@ -39,16 +35,11 @@ def get_driver():
     return driver
 
 
-# ══════════════════════════════════════════════════════════
-# FIXED: Company Name — Naukri 2024 selectors
-# ══════════════════════════════════════════════════════════
-def get_company_name(card) -> str:
-    """
-    Naukri 2024 లో company name ఎక్కడ ఉంటుందో అన్ని selectors try చేస్తాం.
-    పాత code లో .comp-name మాత్రమే try చేసేది — కానీ Naukri HTML మారింది.
-    """
 
-    # ── Layer 1: Direct CSS selectors (priority order) ───────────
+def get_company_name(card) -> str:
+   
+
+    
     CSS_SELECTORS = [
         "a.comp-name",                      # Naukri classic
         ".comp-name",                       # Naukri classic span
@@ -58,15 +49,15 @@ def get_company_name(card) -> str:
         "[class*='company-name']",          # kebab
         "[class*='companyName']",           # camelCase variant
         "[class*='company_name']",          # underscore
-        # Naukri 2024 SRP styled-components
+        
         "[class*='styles_comp']",
         "[class*='styles_company']",
         "[class*='styles_employer']",
-        # Broader fallbacks
+        
         "[class*='employer']",
         "[class*='org-name']",
         "[class*='orgName']",
-        # data attributes
+        
         "[data-company]",
         "[data-employer]",
     ]
@@ -77,7 +68,7 @@ def get_company_name(card) -> str:
             txt = el.text.strip()
             if txt and txt.lower() not in ("", "n/a", "na", "not disclosed"):
                 return txt
-            # text empty అయితే attributes చూడు
+            
             for attr in ["title", "aria-label", "data-company", "data-employer"]:
                 v = (el.get_attribute(attr) or "").strip()
                 if v and v.lower() not in ("", "n/a"):
@@ -87,7 +78,7 @@ def get_company_name(card) -> str:
         except Exception:
             continue
 
-    # ── Layer 2: XPath with class contains ───────────────────────
+    
     XPATH_SELECTORS = [
         ".//*[contains(@class,'comp-name')]",
         ".//*[contains(@class,'compName')]",
@@ -103,7 +94,7 @@ def get_company_name(card) -> str:
             els = card.find_elements(By.XPATH, xp)
             for el in els:
                 txt = el.text.strip()
-                # Job title / location keywords తో match అవ్వకుండా filter చేయి
+                
                 if not txt or txt.lower() in ("n/a", "na", ""):
                     continue
                 SKIP_WORDS = [
@@ -120,7 +111,7 @@ def get_company_name(card) -> str:
         except Exception:
             continue
 
-    # ── Layer 3: Anchor aria-label / title ───────────────────────
+   
     try:
         anchors = card.find_elements(By.TAG_NAME, "a")
         for a in anchors:
@@ -129,7 +120,7 @@ def get_company_name(card) -> str:
                 if not v:
                     continue
                 vl = v.lower()
-                # Company-related keywords ఉంటే తీసుకో
+                
                 if any(k in vl for k in [
                     "pvt","ltd","inc","llc","technologies","solutions","systems",
                     "services","consulting","software","infotech","tech","corp",
@@ -139,14 +130,14 @@ def get_company_name(card) -> str:
     except Exception:
         pass
 
-    # ── Layer 4: Structured data / JSON-LD ───────────────────────
+    
     try:
         scripts = card.find_elements(By.XPATH, ".//script[@type='application/ld+json']")
         for s in scripts:
             import json
             try:
                 data = json.loads(s.get_attribute("innerHTML") or "{}")
-                # JobPosting schema
+                
                 hiring = data.get("hiringOrganization", {})
                 name = hiring.get("name","") if isinstance(hiring, dict) else ""
                 if name:
@@ -159,9 +150,7 @@ def get_company_name(card) -> str:
     return "N/A"
 
 
-# ══════════════════════════════════════════════════════════
-# Other field extractors (unchanged but with extra selectors)
-# ══════════════════════════════════════════════════════════
+
 def get_job_title(card) -> str:
     selectors = [
         (By.CSS_SELECTOR, "a.title"),
@@ -253,13 +242,11 @@ def get_job_link(card) -> str:
         return "N/A"
 
 
-# ══════════════════════════════════════════════════════════
-# Page scraper
-# ══════════════════════════════════════════════════════════
+
 def scrape_page(driver) -> list[dict]:
     jobs = []
 
-    # Wait for cards
+    
     WAIT_SELECTORS = [
         ".jobTuple",
         "article.jobTuple",
@@ -283,7 +270,7 @@ def scrape_page(driver) -> list[dict]:
         print("  [!] Timed out waiting for job cards")
         return jobs
 
-    # Scroll to load lazy content
+    
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2)")
     time.sleep(1)
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
@@ -291,7 +278,7 @@ def scrape_page(driver) -> list[dict]:
     driver.execute_script("window.scrollTo(0, 0)")
     time.sleep(0.5)
 
-    # Find cards
+    
     CARD_SELECTORS = [
         ".jobTuple",
         "article.jobTuple",
@@ -368,7 +355,7 @@ def main():
             all_jobs.extend(jobs)
             print(f"  ✓ {len(jobs)} jobs scraped (total: {len(all_jobs)})")
 
-            # Verify company names
+            
             for j in jobs[:3]:
                 company_status = j['company'] if j['company'] != 'N/A' else '⚠ N/A'
                 print(f"    → {j['job_title']} | Company: {company_status} | {j['location']}")
@@ -378,7 +365,7 @@ def main():
 
     save_results(all_jobs)
 
-    # Summary
+    
     na_count = sum(1 for j in all_jobs if j['company'] == 'N/A')
     print(f"\nDone. Total jobs: {len(all_jobs)}")
     print(f"Company names found: {len(all_jobs) - na_count}/{len(all_jobs)}")

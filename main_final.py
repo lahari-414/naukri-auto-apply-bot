@@ -1,4 +1,5 @@
-import os, time, glob, re, csv, threading
+
+import os, time, glob, re, csv, threading, json
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -35,12 +36,23 @@ SKILLS_DICT = {
     "Selenium","Playwright","Excel","SAP","Salesforce","Blockchain","Solidity",
 }
 
+_SKIP_WORDS = [
+    "yrs","year","lakh","apply","login","register","salary","experience",
+    "hyderabad","bengaluru","bangalore","mumbai","delhi","pune","chennai",
+    "kolkata","noida","gurugram","remote","hybrid","india","worldwide",
+    "full time","part time","contract","fresher","intern","job","jobs",
+]
+
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
+def _is_bad_company(txt):
+    tl = txt.lower()
+    return any(w in tl for w in _SKIP_WORDS) or len(txt) < 2
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NAME DETECTION FROM RESUME PDF
+# NAME DETECTION (reads from resume PDF)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_name_from_resume_pdf(pdf_path: str) -> str:
@@ -60,15 +72,18 @@ def get_name_from_resume_pdf(pdf_path: str) -> str:
                 continue
             if re.search(r'[^A-Za-z\s.\-]', line):
                 continue
+
             words = line.split()
             if not (2 <= len(words) <= 5):
                 continue
             if any(len(w) < 2 for w in words):
                 continue
+
             is_title = all(w[0].isupper() for w in words if w.isalpha())
             is_caps  = line.isupper()
             if not (is_title or is_caps):
                 continue
+
             SKIP = {
                 "resume","curriculum","vitae","cv","profile","summary",
                 "objective","contact","information","details","education",
@@ -79,12 +94,14 @@ def get_name_from_resume_pdf(pdf_path: str) -> str:
             }
             if any(w.lower() in SKIP for w in words):
                 continue
+
             name = " ".join(w.capitalize() for w in words)
-            log(f"  Name detected: {name}")
+            log(f"  Name from resume: {name}")
             return name
 
     except Exception as e:
-        log(f"  Name extraction failed: {e}")
+        log(f"  Resume name extraction failed: {e}")
+
     return ""
 
 
@@ -92,13 +109,14 @@ def detect_applicant_name(pdf_path: str = "") -> str:
     if pdf_path and os.path.exists(pdf_path):
         name = get_name_from_resume_pdf(pdf_path)
         if name:
+            log(f"Applicant name (from resume PDF): {name}")
             return name
-    log("Name not found in resume. Using fallback: Naukri_User")
+    log("Name not found in resume. Using fallback.")
     return "Naukri_User"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BROWSER LAUNCH
+# BROWSER
 # ─────────────────────────────────────────────────────────────────────────────
 
 def launch_browser():
@@ -166,8 +184,8 @@ def start_popup_watcher(driver):
                         pass
                 try:
                     for el in driver.find_elements(By.XPATH,
-                        "//button[normalize-space(text())='×' or normalize-space(text())='x'"
-                        " or normalize-space(text())='X'] | "
+                        "//button[normalize-space(text())='×' or normalize-space(text())='x' "
+                        "or normalize-space(text())='X'] | "
                         "//span[normalize-space(text())='×' or normalize-space(text())='x']"):
                         if el.is_displayed():
                             driver.execute_script("arguments[0].click();", el)
@@ -197,153 +215,104 @@ def stop_popup_watcher():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RESUME DOWNLOAD FROM NAUKRI PROFILE
+# RESUME DOWNLOAD
 # ─────────────────────────────────────────────────────────────────────────────
 
 def download_resume(driver):
-    """Try to auto-download resume from Naukri profile page."""
-    log("Attempting resume download from Naukri profile...")
+    log("Starting resume download...")
 
-    # Clean old PDFs
     for old in glob.glob(f"{DOWNLOAD_DIR}/*.pdf"):
         try:
             os.remove(old)
         except Exception:
             pass
 
-    try:
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(6)
-        _close_once(driver)
-        time.sleep(2)
+    profile_urls = [
+        "https://www.naukri.com/mnjuser/profile",
+        "https://www.naukri.com/mnjuser/homepage",
+        "https://www.naukri.com/mnjuser/myprofile",
+    ]
 
-        # Dismiss NaukriPro banner if present
+    for purl in profile_urls:
+        log(f"Trying profile URL: {purl}")
         try:
-            driver.execute_script("""
-                document.querySelectorAll('[class*="naukPro"],[class*="nakpro"],[class*="proModal"],
-                [class*="premiumBanner"],[class*="upsell"],[class*="overlay"]')
-                .forEach(e => e.style.display='none');
-                document.body.style.overflow='auto';
-            """)
-            time.sleep(1)
-        except Exception:
-            pass
+            driver.get(purl)
+            time.sleep(4)
+            _close_once(driver)
+            time.sleep(2)
+            log(f"  Loaded: {driver.current_url} | {driver.title}")
 
-        # Scroll to Resume section
-        log("  Scrolling to Resume section...")
-        for y in [0, 400, 800, 1200, 1000, 700, 400]:
-            driver.execute_script(f"window.scrollTo(0,{y})")
-            time.sleep(0.5)
+            for y in [0, 400, 800, 1200, 800, 400, 0]:
+                driver.execute_script(f"window.scrollTo(0,{y})")
+                time.sleep(0.3)
 
-        # Try clicking download button using multiple strategies
-        DOWNLOAD_XPATHS = [
-            "//*[contains(@class,'download') and not(contains(@class,'upload')) and not(contains(@class,'update'))]",
-            "//*[contains(@class,'dwnld')]",
-            "//a[contains(@href,'.pdf')]",
-            "//a[contains(@href,'resume') and contains(@href,'download')]",
-            "//*[@title='Download' or @title='download']",
-            "//*[@aria-label='Download' or @aria-label='download']",
-            "//*[contains(@class,'resumeDownload')]",
-            "//*[contains(@class,'resume-download')]",
-            "//span[contains(translate(.,'DOWNLOAD','download'),'download') and not(contains(translate(.,'UPLOAD','upload'),'upload'))]",
-        ]
+            log("  Scanning page for download elements...")
+            found_candidates = _scan_download_elements(driver)
+            log(f"  Found {len(found_candidates)} candidate elements")
 
-        for xp in DOWNLOAD_XPATHS:
+            for info in found_candidates:
+                result = _try_click_element(driver, info)
+                if result:
+                    log(f"Resume downloaded: {result}")
+                    return result
+        except Exception as e:
+            log(f"  Profile URL failed: {e}")
+            continue
+
+    return _live_manual_fallback(driver)
+
+
+def _scan_download_elements(driver):
+    candidates = []
+    try:
+        all_els = driver.find_elements(By.XPATH, "//*")
+        for el in all_els:
             try:
-                els = driver.find_elements(By.XPATH, xp)
-                for el in els:
-                    try:
-                        cls  = (el.get_attribute("class") or "").lower()
-                        text = (el.text or "").strip().lower()
-                        if any(x in cls for x in ["upload","update","add"]):
-                            continue
-                        if any(x in text for x in ["upload","update","add resume"]):
-                            continue
-                        if not el.is_displayed():
-                            continue
-                        log(f"  Found download element: <{el.tag_name}> [{cls[:40]}]")
-                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-                        time.sleep(0.8)
-                        driver.execute_script("arguments[0].click();", el)
-                        time.sleep(5)
-                        pdf = _check_pdf()
-                        if pdf:
-                            log(f"  Resume auto-downloaded: {pdf}")
-                            return pdf
-                    except Exception:
-                        continue
+                if not el.is_displayed():
+                    continue
+                tag  = el.tag_name.lower()
+                text = (el.text or "").strip().lower()
+                cls  = (el.get_attribute("class") or "").lower()
+                href = (el.get_attribute("href") or "").lower()
+
+                if "upload" in cls or "update" in text:
+                    continue
+
+                if "download" in cls:
+                    candidates.insert(0, {"el": el, "tag": tag, "cls": cls,
+                                          "text": text[:50], "href": href[:60]})
+                    log(f"    HIGH: <{tag}> cls=[{cls[:50]}] text=[{text[:30]}]")
+                elif any(k in href for k in [".pdf","download","resume"]):
+                    candidates.append({"el": el, "tag": tag, "cls": cls,
+                                       "text": text[:50], "href": href[:60]})
+                    log(f"    MED:  <{tag}> href=[{href[:50]}]")
+                elif "download" in text and tag in ["a","button","span","div"]:
+                    candidates.append({"el": el, "tag": tag, "cls": cls,
+                                       "text": text[:50], "href": href[:60]})
+                    log(f"    LOW:  <{tag}> text=[{text[:50]}]")
             except Exception:
                 continue
-
-    except Exception as e:
-        log(f"  Profile page error: {e}")
-
-    log("  Auto-download failed. Asking for manual input...")
-    return None
+    except Exception:
+        pass
+    return candidates
 
 
-def get_resume_manually():
-    """Ask user to download resume manually OR paste the path."""
-    print()
-    print("="*65)
-    print("  RESUME DOWNLOAD — MANUAL STEP NEEDED")
-    print("="*65)
-    print()
-    print("  Auto-download could not find the button.")
-    print()
-    print("  OPTION 1 — In the browser:")
-    print("    1. Go to naukri.com/mnjuser/profile")
-    print("    2. Scroll down to 'Resume' section")
-    print("    3. Click the Download (↓) button")
-    print(f"    4. Bot detects it automatically (waits 60 sec)")
-    print()
-    print("  OPTION 2 — Type the PDF path directly:")
-    print("    Example: C:\\Users\\ganta\\Downloads\\MyResume.pdf")
-    print()
-    print("="*65)
-
-    # Poll 60 seconds for auto-detection
-    log("Waiting up to 60 seconds for PDF download...")
-    entered = [False]
-
-    def _wait_enter():
-        input("  (Press ENTER to skip and type path manually): ")
-        entered[0] = True
-
-    t = threading.Thread(target=_wait_enter, daemon=True)
-    t.start()
-
-    for i in range(20):
+def _try_click_element(driver, info):
+    try:
+        el = info["el"]
+        if not el.is_displayed():
+            return None
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+        time.sleep(0.5)
+        log(f"  Clicking <{info['tag']}> cls=[{info['cls'][:40]}] text=[{info['text'][:30]}]")
+        driver.execute_script("arguments[0].click();", el)
+        time.sleep(4)
         pdf = _check_pdf()
         if pdf:
-            log(f"  PDF detected: {pdf}")
             return pdf
-        if entered[0]:
-            break
-        if i > 0 and i % 5 == 0:
-            log(f"  Still waiting... {i*3}s")
-        time.sleep(3)
-
-    pdf = _check_pdf()
-    if pdf:
-        return pdf
-
-    # Manual path input
-    print()
-    while True:
-        path = input("  Paste resume PDF full path (or press ENTER to skip): ").strip().strip('"').strip("'")
-        if not path:
-            log("  No resume provided. Will use default skills.")
-            return None
-        if not path.lower().endswith(".pdf"):
-            print("  File must end with .pdf — try again.")
-            continue
-        if not os.path.exists(path):
-            print(f"  File not found: {path}")
-            print("  Check the path and try again.")
-            continue
-        log(f"  Resume accepted: {path}")
-        return path
+    except Exception as e:
+        log(f"  Click failed: {e}")
+    return None
 
 
 def _check_pdf():
@@ -369,8 +338,44 @@ def _close_once(driver):
     time.sleep(0.5)
 
 
+def _live_manual_fallback(driver):
+    print("\n" + "="*65)
+    print("  RESUME AUTO-DOWNLOAD FAILED")
+    print()
+    print("  Browser is still open. Please follow these steps:")
+    print()
+    print("   Open Naukri profile page in Chrome")
+    print("     URL: https://www.naukri.com/mnjuser/profile")
+    print()
+    print("   Scroll to the 'Resume' section on the page")
+    print()
+    print("   Click the Download icon (↓ arrow)")
+    print("     (Do NOT click Upload — click Download)")
+    print()
+    print(f"   Bot will detect the file automatically")
+    print()
+    print(f"  Downloads folder: {DOWNLOAD_DIR}")
+    print("="*65 + "\n")
+
+    log("Polling for PDF every 3s (up to 5 minutes)...")
+    for i in range(100):
+        pdf = _check_pdf()
+        if pdf:
+            log(f"PDF detected automatically: {pdf}")
+            return pdf
+        if i % 5 == 0:
+            log(f"  Still waiting... {i*3}s.")
+        time.sleep(3)
+
+    print("\n  5 minutes passed, PDF still not found.")
+    path = input(f"  Enter full path of resume PDF: ").strip().strip('"')
+    if path and os.path.exists(path) and path.lower().endswith(".pdf"):
+        return path
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# SKILLS EXTRACTION FROM RESUME
+# SKILLS EXTRACTION
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_skills(pdf_path):
@@ -398,154 +403,23 @@ def extract_skills(pdf_path):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PREFERRED SKILLS — ask user in CMD
+# JOB SEARCH
 # ─────────────────────────────────────────────────────────────────────────────
-
-def ask_preferred_skills(resume_skills):
-    """
-    Show resume skills to user.
-    Ask if they want to add preferred skills to search first.
-    Returns final ordered skill list: preferred first, then resume skills.
-    """
-    print()
-    print("="*65)
-    print("  STEP: PREFERRED SKILLS FOR JOB SEARCH")
-    print("="*65)
-    print()
-
-    if resume_skills:
-        print(f"  Skills found in your resume ({len(resume_skills)}):")
-        for i, s in enumerate(resume_skills, 1):
-            print(f"    {i:2}. {s}")
-    else:
-        print("  No skills found in resume.")
-
-    print()
-    print("  Do you want to search for specific/preferred skills first?")
-    print("  (e.g. Python Developer, Data Analyst, Java Developer)")
-    print()
-    print("  Enter preferred skills separated by commas,")
-    print("  OR press ENTER to use resume skills directly.")
-    print()
-
-    raw = input("  Your preferred skills: ").strip()
-
-    if not raw:
-        log("No preferred skills given. Using resume skills.")
-        if resume_skills:
-            return resume_skills
-        else:
-            default = ["Python", "Java", "Data Analysis", "SQL", "Selenium"]
-            log(f"Using default skills: {default}")
-            return default
-
-    # Parse preferred skills
-    preferred = [s.strip() for s in raw.split(",") if s.strip()]
-    log(f"Preferred skills entered: {preferred}")
-
-    # Merge: preferred first, then resume skills (no duplicates)
-    preferred_lower = [p.lower() for p in preferred]
-    merged = list(preferred)
-    for s in resume_skills:
-        if s.lower() not in preferred_lower:
-            merged.append(s)
-
-    print()
-    print(f"  Final search order ({len(merged)} skills):")
-    for i, s in enumerate(merged, 1):
-        tag = " ← preferred" if i <= len(preferred) else ""
-        print(f"    {i:2}. {s}{tag}")
-    print()
-
-    return merged
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# COMPANY DETECTION
-# ─────────────────────────────────────────────────────────────────────────────
-
-def get_company_from_card(card):
-    SELECTORS = [
-        "a.comp-name", ".comp-name", "span.comp-name",
-        "[class*='comp-name']", "[class*='compName']",
-        "[class*='company-name']", "[class*='companyName']",
-        "[data-company]", "[class*='employer']",
-    ]
-    for sel in SELECTORS:
-        try:
-            el = card.find_element(By.CSS_SELECTOR, sel)
-            txt = el.text.strip()
-            if txt and txt.lower() not in ("", "n/a", "na", "not disclosed"):
-                return txt
-        except Exception:
-            continue
-    return "N/A"
-
-
-def get_company_from_job_page(driver):
-    SELECTORS = [
-        ".comp-name", "a.comp-name", "[class*='comp-name']",
-        "[class*='companyName']", ".jd-header-comp-name",
-    ]
-    for sel in SELECTORS:
-        try:
-            el = driver.find_element(By.CSS_SELECTOR, sel)
-            txt = el.text.strip()
-            if txt and txt.lower() not in ("", "n/a", "na"):
-                return txt
-        except Exception:
-            continue
-    try:
-        title = driver.title or ""
-        if " at " in title:
-            part = title.split(" at ")[1].split("|")[0].strip()
-            if part:
-                return part
-    except Exception:
-        pass
-    return "N/A"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB SEARCH  — searches preferred skills first, then resume skills
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _skill_to_url(skill: str) -> str:
-    """Convert a skill string to Naukri URL keyword format."""
-    s = skill.lower().strip()
-    s = s.replace("#", "sharp")
-    # dots and slashes removed
-    s = s.replace(".", "").replace("/", "")
-    # spaces become hyphens in slug part but + in k= param
-    # We keep spaces as %20 is handled by Naukri — just use + between words
-    s = s.replace(" ", "+")
-    return s
-
 
 def search_jobs(driver, skills, max_jobs=20):
-    """
-    Search Naukri using the skill list.
-    Preferred skills are first in the list so they get priority.
-    Builds correct URL: 'performance testing' → k=performance+testing
-    """
-    BAD = {"C#", "C++", "ASP.NET", ".NET", "CI/CD", "Next.js", "MATLAB", "R"}
-
-    # Use top preferred skill as primary search (keeps multi-word skills intact)
-    url_skills = [s for s in skills if s not in BAD][:1]
+    BAD = {"C#","C++","ASP.NET",".NET","CI/CD","Next.js","MATLAB","R"}
+    url_skills = [s for s in skills if s not in BAD][:2]
     if not url_skills:
-        url_skills = ["software developer"]
+        url_skills = ["software","developer"]
 
-    # Build keyword: each skill's words joined by +, skills separated by +
-    # e.g. ["performance testing"] → "performance+testing"
-    # e.g. ["Python", "Java"]     → "python+java"
-    kw_parts = []
-    for s in url_skills:
-        kw_parts.append(_skill_to_url(s))
-    kw = "+".join(kw_parts)
+    kw = "+".join(
+        s.lower().replace(" ","+").replace(".","").replace("/","")
+         .replace("#","sharp").replace("+","plus")
+        for s in url_skills
+    )
 
     search_url = f"https://www.naukri.com/jobs-in-india?k={kw}&experience=0&sort=1"
-    log(f"Searching jobs for: {url_skills}")
-    log(f"URL: {search_url}")
+    log(f"Searching latest jobs: {search_url}")
 
     try:
         driver.get(search_url)
@@ -553,16 +427,16 @@ def search_jobs(driver, skills, max_jobs=20):
         log(f"Navigation error: {e}")
         return []
 
-    time.sleep(7)
+    time.sleep(5)
     _close_once(driver)
     time.sleep(2)
 
     all_jobs = []
-    for page in range(1, 5):
+    for page in range(1, 4):
         log(f"Scraping page {page}...")
         jobs = _scrape_page(driver)
         all_jobs.extend(jobs)
-        log(f"  Page {page}: {len(jobs)} jobs | Total: {len(all_jobs)}")
+        log(f"  Page {page}: {len(jobs)} | Total: {len(all_jobs)}")
         if len(all_jobs) >= max_jobs or not jobs:
             break
         if not _next_page(driver):
@@ -575,72 +449,38 @@ def search_jobs(driver, skills, max_jobs=20):
             seen.add(j["url"])
             unique.append(j)
 
-    log(f"Unique jobs found: {len(unique)}")
+    log(f"Unique jobs: {len(unique)}")
     return unique[:max_jobs]
 
 
 def _scrape_page(driver):
     jobs = []
-    # Scroll to load all lazy-loaded cards
     time.sleep(2)
-    for scroll_y in [300, 600, 900, 1200, 900, 600, 300, 0]:
-        driver.execute_script(f"window.scrollTo(0,{scroll_y})")
-        time.sleep(0.4)
+    driver.execute_script("window.scrollTo(0,document.body.scrollHeight/2)")
     time.sleep(1)
 
     cards = []
-    CARD_SELECTORS = [
-        # Naukri 2025 new selectors first
-        "div[class*='srp-jobtuple']",
-        "article[class*='srp-jobtuple']",
-        "[class*='jobTuple']",
-        "[class*='job-tuple']",
-        # Classic selectors
-        "article.jobTuple",
-        ".srp-jobtuple-wrapper",
-        "div.jobTuple",
-        ".cust-job-tuple",
-        "article[class*='job']",
-        "[class*='jobCard']",
-        "[class*='job-card']",
-        # New 2024 layout
-        ".styles_job-listing-container__OCfZC article",
-        "div[class*='listContainer'] article",
-        "div[class*='list-container'] article",
-        # Broader fallback
-        "article",
-    ]
-
-    for sel in CARD_SELECTORS:
-        found = driver.find_elements(By.CSS_SELECTOR, sel)
-        # Filter: must have an anchor with naukri.com job URL
-        valid = []
-        for el in found:
-            try:
-                a = el.find_element(By.XPATH, ".//a[contains(@href,'naukri.com') or contains(@href,'/job-listings-')]")
-                if a:
-                    valid.append(el)
-            except Exception:
-                pass
-        if valid:
-            cards = valid
-            log(f"  Cards found [{sel}]: {len(cards)}")
+    for sel in [
+        "article.jobTuple",".srp-jobtuple-wrapper","div.jobTuple",
+        ".cust-job-tuple","article[class*='job']","div[class*='jobTuple']",
+        "[class*='jobCard']","[class*='job-card']",
+    ]:
+        cards = driver.find_elements(By.CSS_SELECTOR, sel)
+        if cards:
+            log(f"  Cards [{sel}]: {len(cards)}")
             break
 
     if not cards:
-        log("  No job cards found — trying link scrape...")
+        log("  No cards — trying direct link scrape...")
         try:
             links = driver.find_elements(By.XPATH,
                 "//a[contains(@href,'/job-listings-') or contains(@href,'-jobs-in-')]")
             for lnk in links:
-                href  = lnk.get_attribute("href") or ""
+                href = lnk.get_attribute("href") or ""
                 title = lnk.text.strip()
                 if href and title and "naukri.com" in href and len(title) > 5:
-                    jobs.append({
-                        "title": title[:100], "company": "N/A",
-                        "location": "N/A", "experience": "N/A",
-                        "salary": "Not Disclosed", "url": href,
-                    })
+                    jobs.append({"title": title[:100], "company": "",
+                                 "location": "N/A", "experience": "N/A", "url": href})
         except Exception:
             pass
         return jobs
@@ -648,12 +488,11 @@ def _scrape_page(driver):
     for card in cards:
         try:
             title, url = "", ""
-            for sel in ["a.title", "a.jobTitle", "a[class*='title']", "h3 a", "h2 a",
-                        "[class*='job-title'] a", "[class*='jobTitle'] a"]:
+            for sel in ["a.title","a.jobTitle","a[class*='title']","h3 a","h2 a"]:
                 try:
                     el = card.find_element(By.CSS_SELECTOR, sel)
-                    t  = el.text.strip()
-                    u  = el.get_attribute("href") or ""
+                    t = el.text.strip()
+                    u = el.get_attribute("href") or ""
                     if t and u and "naukri.com" in u:
                         title, url = t, u
                         break
@@ -662,24 +501,27 @@ def _scrape_page(driver):
             if not title or not url:
                 continue
 
-            company = get_company_from_card(card)
-
             def get(sels):
                 for s in sels:
                     try:
                         v = card.find_element(By.CSS_SELECTOR, s).text.strip()
-                        if v:
-                            return v
+                        if v: return v
                     except Exception:
                         pass
                 return "N/A"
 
+            company_card = get([
+                "a.comp-name", ".comp-name",
+                "[class*='compName']", "[class*='companyName']",
+                "[class*='company-name']", "a.subTitle",
+                "a.companyName", "[class*='company']",
+            ])
+
             jobs.append({
                 "title":      title,
-                "company":    company,
-                "location":   get([".locWdth", "[class*='location']", "[class*='loc']"]),
-                "experience": get([".expwdth", "[class*='experience']", "[class*='exp']"]),
-                "salary":     get([".salary", "[class*='salary']"]) or "Not Disclosed",
+                "company":    company_card,
+                "location":   get([".locWdth","[class*='location']","[class*='loc']"]),
+                "experience": get([".expwdth","[class*='experience']","[class*='exp']"]),
                 "url":        url,
             })
         except Exception:
@@ -688,7 +530,7 @@ def _scrape_page(driver):
 
 
 def _next_page(driver):
-    for sel in ["a[class*='next']", "a[title='Next']", "[class*='pagination'] a:last-child"]:
+    for sel in ["a[class*='next']","a[title='Next']","[class*='pagination'] a:last-child"]:
         try:
             btn = driver.find_element(By.CSS_SELECTOR, sel)
             if btn.is_enabled() and btn.is_displayed():
@@ -701,20 +543,82 @@ def _next_page(driver):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# APPLY TO JOBS
+# COMPANY DETECTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_company_from_page(driver):
+    css_selectors = [
+        "a.comp-name", ".comp-name", "[class*='companyName']",
+        "[class*='comp-name']", "[class*='CompanyName']",
+        "[class*='company-name']", ".jd-header-comp-name",
+        "a[class*='company']", "[class*='compName']", "[class*='orgName']",
+        "[class*='styles_comp']", "[class*='comp_info']",
+        "a[data-ga-track*='company']",
+    ]
+    for sel in css_selectors:
+        try:
+            els = driver.find_elements(By.CSS_SELECTOR, sel)
+            for el in els:
+                txt = el.text.strip()
+                if txt and not _is_bad_company(txt):
+                    log(f"    Company [CSS:{sel}] => {txt}")
+                    return txt
+        except Exception:
+            continue
+
+    xpaths = [
+        "//a[contains(@class,'comp-name')]",
+        "//a[contains(@class,'company')]",
+        "//*[contains(@class,'companyName')]",
+        "//*[contains(@class,'comp-name')]",
+        "//div[contains(@class,'jd-header')]//a",
+        "//div[contains(@class,'job-header')]//a",
+    ]
+    for xp in xpaths:
+        try:
+            els = driver.find_elements(By.XPATH, xp)
+            for el in els:
+                txt = el.text.strip()
+                if txt and not _is_bad_company(txt):
+                    log(f"    Company [XPath] => {txt}")
+                    return txt
+        except Exception:
+            continue
+
+    try:
+        scripts = driver.find_elements(By.XPATH,
+            "//script[@type='application/ld+json']")
+        for script in scripts:
+            content = script.get_attribute("innerHTML") or ""
+            if "hiringOrganization" in content:
+                data = json.loads(content)
+                if isinstance(data, dict):
+                    org = data.get("hiringOrganization", {})
+                    if isinstance(org, dict) and org.get("name"):
+                        name = org["name"].strip()
+                        if name and not _is_bad_company(name):
+                            log(f"    Company [JSON-LD] => {name}")
+                            return name
+    except Exception:
+        pass
+
+    return "N/A"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# APPLY
 # ─────────────────────────────────────────────────────────────────────────────
 
 def apply_to_jobs(driver, job_listings):
     results = []
     total = len(job_listings)
     for idx, job in enumerate(job_listings, 1):
-        log(f"\n[{idx}/{total}] Applying: {job['title']} @ {job['company']}")
-        status, note, company = _apply_one(driver, job["url"], job["company"])
-        log(f"  => {status}: {note}")
-        final_company = company if company != "N/A" else job["company"]
+        log(f"\n[{idx}/{total}] {job['title']} @ {job.get('company') or '?'}")
+        status, note, company = _apply_one(driver, job["url"], job.get("company",""))
+        log(f"  => {status} | Company: {company}")
         results.append({
             **job,
-            "company":    final_company,
+            "company":    company,
             "status":     status,
             "note":       note,
             "applied_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -723,17 +627,21 @@ def apply_to_jobs(driver, job_listings):
     return results
 
 
-def _apply_one(driver, url, existing_company="N/A"):
+def _apply_one(driver, url, company_card=""):
+    """Returns (status, note, company_name)."""
+    company = company_card
     try:
         driver.get(url)
         time.sleep(4)
         _close_once(driver)
         time.sleep(1)
 
-        page_company = get_company_from_job_page(driver)
-        company = page_company if page_company != "N/A" else existing_company
+        fetched = _get_company_from_page(driver)
+        if fetched and fetched != "N/A":
+            company = fetched
+        elif not company or company == "N/A":
+            company = "N/A"
 
-        # Check already applied
         for xp in [
             "//button[contains(normalize-space(.),'Applied')]",
             "//*[contains(normalize-space(.),'already applied')]",
@@ -745,7 +653,6 @@ def _apply_one(driver, url, existing_company="N/A"):
             except Exception:
                 pass
 
-        # Find apply button
         apply_btn = None
         for xp in [
             "//button[normalize-space(.)='Apply' or normalize-space(.)='Apply Now']",
@@ -753,6 +660,7 @@ def _apply_one(driver, url, existing_company="N/A"):
             "//a[contains(normalize-space(.),'Apply') and not(contains(normalize-space(.),'Applied'))]",
             "//button[@id='apply-button']",
             "//*[contains(@class,'applyBtn') and not(contains(@class,'applied'))]",
+            "//*[contains(@class,'apply-button')]",
         ]:
             try:
                 apply_btn = WebDriverWait(driver, 4).until(
@@ -774,11 +682,11 @@ def _apply_one(driver, url, existing_company="N/A"):
             driver.back()
             return "external", f"External: {driver.current_url[:80]}", company
 
-        result_status, result_note = _handle_flow(driver)
-        return result_status, result_note, company
+        status, note = _handle_flow(driver)
+        return status, note, company
 
     except Exception as e:
-        return "failed", str(e)[:100], existing_company
+        return "failed", str(e)[:100], company
 
 
 def _handle_flow(driver):
@@ -800,7 +708,7 @@ def _handle_flow(driver):
             except Exception:
                 pass
         clicked = False
-        for label in ["Submit", "Confirm", "Apply Now", "Apply", "Continue", "Next", "Done"]:
+        for label in ["Submit","Confirm","Apply Now","Apply","Continue","Next","Done"]:
             try:
                 btn = driver.find_element(By.XPATH,
                     f"//button[contains(normalize-space(.),'{label}')]")
@@ -817,16 +725,17 @@ def _handle_flow(driver):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GENERATE REPORT — filename = person name
+# REPORT  ← KEY CHANGE: filename now uses applicant name instead of timestamp
 # ─────────────────────────────────────────────────────────────────────────────
 
 def generate_report(applied_jobs, skills, applicant_name="Naukri_User"):
+    # Build a filename-safe version of the applicant's name (e.g. "Lahari Reddy" → "Lahari_Reddy")
     safe_name = re.sub(r'[^A-Za-z0-9_]', '_', applicant_name.strip().replace(" ", "_"))
 
+    # Files named as: Lahari_Reddy.csv / Lahari_Reddy.html
+    # If a file with this name already exists, append timestamp to avoid overwrite
     base_csv  = os.path.join(REPORTS_DIR, f"{safe_name}.csv")
     base_html = os.path.join(REPORTS_DIR, f"{safe_name}.html")
-
-    # Don't overwrite — add timestamp if file exists
     if os.path.exists(base_csv) or os.path.exists(base_html):
         csv_path  = os.path.join(REPORTS_DIR, f"{safe_name}_{TIMESTAMP}.csv")
         html_path = os.path.join(REPORTS_DIR, f"{safe_name}_{TIMESTAMP}.html")
@@ -834,37 +743,40 @@ def generate_report(applied_jobs, skills, applicant_name="Naukri_User"):
         csv_path  = base_csv
         html_path = base_html
 
-    fields = ["title", "company", "location", "experience", "salary",
-              "status", "note", "applied_at", "url"]
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+    fields = ["title","company","location","experience",
+              "status","note","applied_at","url"]
+    with open(csv_path,"w",newline="",encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         w.writerows(applied_jobs)
 
     total    = len(applied_jobs)
-    applied  = sum(1 for j in applied_jobs if j["status"] == "applied")
-    already  = sum(1 for j in applied_jobs if j["status"] == "already_applied")
-    external = sum(1 for j in applied_jobs if j["status"] == "external")
-    failed   = sum(1 for j in applied_jobs if j["status"] == "failed")
+    applied  = sum(1 for j in applied_jobs if j["status"]=="applied")
+    already  = sum(1 for j in applied_jobs if j["status"]=="already_applied")
+    external = sum(1 for j in applied_jobs if j["status"]=="external")
+    failed   = sum(1 for j in applied_jobs if j["status"]=="failed")
 
     rows = ""
     for j in applied_jobs:
+        if j["status"] == "failed":
+            continue
         badge = {
             "applied":         "badge-applied",
             "already_applied": "badge-already",
             "external":        "badge-external",
-            "failed":          "badge-failed",
-        }.get(j["status"], "badge-failed")
-        t = j["title"].replace("<", "&lt;").replace(">", "&gt;")
-        c = j.get("company", "N/A").replace("<", "&lt;").replace(">", "&gt;")
-        c_display = c if c and c != "N/A" else "<span style='color:#94a3b8;font-style:italic'>Unknown</span>"
+        }.get(j["status"], "badge-applied")
+
+        t = j["title"].replace("<","&lt;").replace(">","&gt;")
+        c = (j.get("company") or "N/A").replace("<","&lt;").replace(">","&gt;")
+
         rows += f"""<tr>
             <td><a href="{j['url']}" target="_blank">{t}</a></td>
-            <td class="company-cell">{c_display}</td>
-            <td>{j['location']}</td><td>{j['experience']}</td>
-            <td>{j['salary']}</td>
-            <td><span class="badge {badge}">{j['status'].replace('_', ' ').title()}</span></td>
-            <td>{j['note']}</td><td>{j['applied_at']}</td>
+            <td><strong>{c}</strong></td>
+            <td>{j['location']}</td>
+            <td>{j['experience']}</td>
+            <td><span class="badge {badge}">{j['status'].replace('_',' ').title()}</span></td>
+            <td>{j['note']}</td>
+            <td>{j['applied_at']}</td>
         </tr>"""
 
     stags = "".join(f'<span class="stag">{s}</span>' for s in skills)
@@ -872,46 +784,49 @@ def generate_report(applied_jobs, skills, applicant_name="Naukri_User"):
     html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Naukri Report — {applicant_name}</title>
+<title>Naukri Auto-Apply Report — {applicant_name}</title>
 <style>
   *{{box-sizing:border-box;margin:0;padding:0}}
-  body{{font-family:'Segoe UI',sans-serif;background:#0d0f1a;color:#e2e8f0;padding:32px 24px}}
-  .wrap{{max-width:1200px;margin:0 auto}}
-  h1{{font-size:1.8rem;color:#4ade80;margin-bottom:4px}}
-  .applicant-line{{font-size:.92rem;color:#94a3b8;margin-bottom:4px}}
-  .applicant-line strong{{color:#60a5fa;font-weight:600}}
-  .sub{{color:#64748b;font-size:.82rem;margin-bottom:28px}}
+  body{{font-family:'Segoe UI',sans-serif;background:#ffffff;color:#1e293b;padding:32px 24px}}
+  .wrap{{max-width:1260px;margin:0 auto}}
+  h1{{font-size:1.8rem;color:#16a34a;margin-bottom:6px}}
+  .applicant-line{{font-size:.92rem;color:#64748b;margin-bottom:4px}}
+  .applicant-line strong{{color:#2563eb;font-weight:600}}
+  .sub{{color:#64748b;font-size:.85rem;margin-bottom:30px}}
   .stats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:26px}}
-  .stat{{background:#1e2235;border:1px solid #2d3651;border-radius:12px;padding:18px;text-align:center}}
+  .stat{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;text-align:center}}
   .num{{font-size:2.2rem;font-weight:700}}
-  .lbl{{color:#94a3b8;font-size:.72rem;text-transform:uppercase;margin-top:4px}}
-  .c1{{color:#60a5fa}}.c2{{color:#4ade80}}.c3{{color:#facc15}}.c4{{color:#a78bfa}}.c5{{color:#f87171}}
+  .lbl{{color:#94a3b8;font-size:.72rem;text-transform:uppercase;margin-top:4px;letter-spacing:.05em}}
+  .c1{{color:#2563eb}}.c2{{color:#16a34a}}.c3{{color:#d97706}}.c4{{color:#7c3aed}}.c5{{color:#dc2626}}
   .sk{{margin-bottom:22px}}
-  .sk-t{{font-size:.72rem;text-transform:uppercase;color:#64748b;margin-bottom:8px}}
-  .stag{{display:inline-block;background:#1e2235;border:1px solid #334155;color:#60a5fa;
+  .sk-t{{font-size:.72rem;text-transform:uppercase;color:#64748b;margin-bottom:8px;letter-spacing:.05em}}
+  .stag{{display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;
          font-size:.78rem;padding:3px 11px;border-radius:20px;margin:3px}}
-  .tw{{overflow-x:auto;border-radius:12px;border:1px solid #2d3651}}
+  .tw{{overflow-x:auto;border-radius:12px;border:1px solid #e2e8f0;
+       box-shadow:0 1px 6px rgba(0,0,0,.06)}}
   table{{width:100%;border-collapse:collapse;font-size:.84rem}}
-  thead tr{{background:#1a1f35}}
-  th{{padding:11px 13px;text-align:left;color:#64748b;font-weight:500;
-      text-transform:uppercase;font-size:.7rem;white-space:nowrap}}
-  tbody tr{{border-top:1px solid #1e2235}}
-  tbody tr:hover{{background:#1a1f35}}
-  td{{padding:10px 13px;vertical-align:middle}}
-  td a{{color:#60a5fa;text-decoration:none}}
+  thead tr{{background:#f1f5f9}}
+  th{{padding:12px 14px;text-align:left;color:#475569;font-weight:600;
+      text-transform:uppercase;font-size:.7rem;white-space:nowrap;letter-spacing:.04em}}
+  tbody tr{{border-top:1px solid #f1f5f9}}
+  tbody tr:hover{{background:#f8fafc}}
+  td{{padding:11px 14px;vertical-align:middle}}
+  td a{{color:#2563eb;text-decoration:none;font-weight:500}}
   td a:hover{{text-decoration:underline}}
-  .company-cell{{color:#e2e8f0;font-weight:500}}
-  .badge{{display:inline-block;padding:3px 9px;border-radius:20px;
+  td strong{{color:#0f172a}}
+  .badge{{display:inline-block;padding:4px 10px;border-radius:20px;
           font-size:.72rem;font-weight:600;white-space:nowrap}}
-  .badge-applied{{background:#14532d;color:#4ade80}}
-  .badge-already{{background:#422006;color:#facc15}}
-  .badge-external{{background:#2e1065;color:#a78bfa}}
-  .badge-failed{{background:#450a0a;color:#f87171}}
-  .ft{{margin-top:26px;text-align:center;color:#334155;font-size:.78rem}}
+  .badge-applied{{background:#dcfce7;color:#15803d}}
+  .badge-already{{background:#fef9c3;color:#a16207}}
+  .badge-external{{background:#ede9fe;color:#6d28d9}}
+  .ft{{margin-top:26px;text-align:center;color:#cbd5e1;font-size:.78rem}}
 </style></head><body><div class="wrap">
   <h1>&#x1F4CB; Naukri Auto-Apply Report</h1>
   <div class="applicant-line">Applied by: <strong>{applicant_name}</strong></div>
-  <div class="sub">Generated: {datetime.now().strftime("%d %b %Y, %I:%M %p")}</div>
+  <div class="sub">
+    Generated: {datetime.now().strftime("%d %b %Y, %I:%M %p")}
+    &nbsp;&bull;&nbsp; Jobs sorted by: <strong>Latest First</strong>
+  </div>
   <div class="stats">
     <div class="stat"><div class="num c1">{total}</div><div class="lbl">Total</div></div>
     <div class="stat"><div class="num c2">{applied}</div><div class="lbl">Applied</div></div>
@@ -919,114 +834,90 @@ def generate_report(applied_jobs, skills, applicant_name="Naukri_User"):
     <div class="stat"><div class="num c4">{external}</div><div class="lbl">External</div></div>
     <div class="stat"><div class="num c5">{failed}</div><div class="lbl">Failed</div></div>
   </div>
-  <div class="sk"><div class="sk-t">Skills Used for Search</div>{stags}</div>
+  <div class="sk"><div class="sk-t">Skills from Resume</div>{stags}</div>
   <div class="tw"><table>
     <thead><tr>
-      <th>Job Title</th><th>Company</th><th>Location</th><th>Exp</th>
-      <th>Salary</th><th>Status</th><th>Note</th><th>Applied At</th>
+      <th>Job Title</th>
+      <th>Company</th>
+      <th>Location</th>
+      <th>Exp</th>
+      <th>Status</th>
+      <th>Note</th>
+      <th>Applied At</th>
     </tr></thead>
     <tbody>{rows}</tbody>
   </table></div>
   <div class="ft">Naukri Auto-Apply Bot &middot; {applicant_name} &middot; {datetime.now().year}</div>
 </div></body></html>"""
 
-    with open(html_path, "w", encoding="utf-8") as f:
+    with open(html_path,"w",encoding="utf-8") as f:
         f.write(html)
 
     log(f"CSV  : {csv_path}")
     log(f"HTML : {html_path}")
-    print(f"\n>>> Report saved as: {os.path.basename(html_path)}")
-    return html_path, csv_path
+    print(f"\n>>> Report ready!\n    {html_path}\n")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MAIN — exact flow you requested
+# MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     print("\n" + "="*65)
-    print("  NAUKRI AUTO-APPLY BOT")
+    print("  NAUKRI AUTO-APPLY BOT — Final Version")
     print("="*65 + "\n")
 
-    # ── STEP 1: Open browser ──────────────────────────────────────────
     driver = launch_browser()
     start_popup_watcher(driver)
 
-    # ── STEP 2: Login ─────────────────────────────────────────────────
-    log("Opening Naukri login page...")
+    log("Opening Naukri login...")
     driver.get("https://www.naukri.com/nlogin/login")
-    print()
-    print(">>> Enter your Naukri Email and Password in the browser")
-    input(">>> After login is complete, press ENTER here... ")
-    print()
+    print("\n>>> Login to Naukri in the browser (email + password)")
+    input(">>> Press ENTER after login is complete...\n")
     time.sleep(3)
 
-    # ── STEP 3: Download resume from Naukri profile ───────────────────
+    # Step 1: Download resume
     resume_path = download_resume(driver)
-    if not resume_path:
-        resume_path = get_resume_manually()
 
-    # ── STEP 4: Extract skills & name from resume ─────────────────────
-    resume_skills = []
-    applicant_name = "Naukri_User"
-
+    # Step 2: Extract skills
+    skills = []
     if resume_path and os.path.exists(resume_path):
-        resume_skills  = extract_skills(resume_path)
-        applicant_name = detect_applicant_name(resume_path)
+        skills = extract_skills(resume_path)
 
-    print()
-    print(f"  Applicant : {applicant_name}")
-    print(f"  Resume skills ({len(resume_skills)}): {resume_skills}")
+    if not skills:
+        log("Skills not found — using defaults")
+        skills = ["Java","Python","Selenium","SQL","Data Analysis"]
 
-    # ── STEP 5: Ask preferred skills ──────────────────────────────────
-    final_skills = ask_preferred_skills(resume_skills)
+    log(f"Skills to search: {skills}")
 
-    if not final_skills:
-        final_skills = ["Python", "Java", "Data Analysis", "SQL", "Selenium"]
-        log(f"No skills found. Using defaults: {final_skills}")
+    # Step 3: Detect applicant name from resume
+    applicant_name = detect_applicant_name(resume_path or "")
+    print(f"\n>>> Applicant Name Detected: {applicant_name}\n")
 
-    log(f"Searching with skills: {final_skills}")
-
-    # ── STEP 6: Search jobs (preferred skills used first) ─────────────
-    print()
-    log("Starting job search...")
-    job_listings = search_jobs(driver, final_skills, max_jobs=20)
-
+    # Step 4: Search jobs
+    job_listings = search_jobs(driver, skills, max_jobs=20)
     if not job_listings:
-        print()
-        print("  No jobs found with current search.")
-        print("  Possible reasons:")
-        print("    - Naukri page structure changed")
-        print("    - Network issue")
-        print("    - Try running again")
-        log("No jobs found.")
+        log("No jobs found. Check internet connection and try again.")
 
-    # ── STEP 7: Apply to jobs ─────────────────────────────────────────
+    # Step 5: Apply
     applied_jobs = []
     if job_listings:
-        print(f"\n>>> {len(job_listings)} jobs found! Starting applications...\n")
+        print(f"\n>>> {len(job_listings)} jobs found. Applying now...\n")
         applied_jobs = apply_to_jobs(driver, job_listings)
 
-    # ── STEP 8: Generate report ───────────────────────────────────────
+    # Step 6: Generate report (filename = applicant name + timestamp)
     if applied_jobs:
-        generate_report(applied_jobs, final_skills, applicant_name)
+        generate_report(applied_jobs, skills, applicant_name)
     else:
-        log("No applications were made.")
+        log("No applications made.")
 
-    # ── Done ──────────────────────────────────────────────────────────
-    print()
-    print("="*65)
-    print(f"  DONE!")
-    print(f"  Applicant : {applicant_name}")
-    print(f"  Reports   : {REPORTS_DIR}")
+    print("\n" + "="*65)
+    log(f"Bot done! Reports saved in: {REPORTS_DIR}")
     print("="*65)
 
     stop_popup_watcher()
-    input("\nPress ENTER to close the browser...")
-    try:
-        driver.quit()
-    except Exception:
-        pass
+    input("\nPress ENTER to close browser")
+    driver.quit()
 
 
 if __name__ == "__main__":
